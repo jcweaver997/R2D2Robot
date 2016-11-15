@@ -17,12 +17,17 @@ namespace R2D2Robot
 		{
 			netCom = new R2D2Networking();
 			netCom.Start();
-			sp = new SerialPort("COM9", 115200, Parity.None, 8, StopBits.One);
+			sp = new SerialPort("COM9", 9600, Parity.None, 8, StopBits.One);
 			sp.Open();
 
 			for (;;)
 			{
 				Update();
+				if (!netCom.connected)
+				{
+					MassZero();
+					netCom.Start();
+				}
 			}
 		}
 
@@ -36,12 +41,21 @@ namespace R2D2Robot
 			switch (message.valueType)
 			{
 				case R2D2Networking.ValueType.throttle:
-					Console.WriteLine(message.value);
+					Console.WriteLine(((int)message.valueType) + " " + message.value);
 					sp.WriteLine(((int)message.valueType)+" "+message.value);
 					break;
 				default:
 					
 					break;
+			}
+		}
+
+		// For safety purposes
+		public void MassZero()
+		{
+			foreach (R2D2Networking.ValueType v in Enum.GetValues(typeof(R2D2Networking.ValueType)))
+			{
+				sp.WriteLine(((int)v) + " " + 0);
 			}
 		}
 

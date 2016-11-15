@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
-
+using System.Threading;
 namespace R2D2Robot
 {
 	class R2D2Networking
@@ -10,11 +10,13 @@ namespace R2D2Robot
 		NetType netType;
 		TcpClient remote;
 		TcpListener robot;
-
 		NetworkStream com;
+		Thread timeout;
+		public bool connected { get; private set;}
 
 		private const int port = 4445;
 		private string ip;
+		private bool btimeout = false;
 
 		public enum NetType
 		{
@@ -51,16 +53,23 @@ namespace R2D2Robot
 				case NetType.Remote:
 					Console.WriteLine("Attempting connection...");
 					remote = new TcpClient(ip, port);
-
 					Console.WriteLine("Connected");
+					connected = true;
 					com = remote.GetStream();
 					break;
 				case NetType.Robot:
-
+					if (robot != null)
+					{
+						robot.Stop();
+						remote.Close();
+					}
 					robot = new TcpListener(System.Net.IPAddress.Any, port);
 					robot.Start();
 					Console.WriteLine("Waiting for remote...");
 					remote = robot.AcceptTcpClient();
+					timeout = new Thread(new ThreadStart(Timeout));
+					timeout.Start();
+					connected = true;
 					com = remote.GetStream();
 					break;
 				default:
@@ -75,7 +84,6 @@ namespace R2D2Robot
 			byte[] values = BitConverter.GetBytes(v);
 			values.CopyTo(packet, 1);
 			com.Write(packet, 0, 5);
-			Console.WriteLine("sent 5");
 		}
 
 		public ReturnValueType RecvValue()
@@ -86,6 +94,7 @@ namespace R2D2Robot
 				ret.isData = false;
 				return ret;
 			}
+			btimeout = false;
 			ret.isData = true;
 			byte[] buffer = new byte[5];
 			int numberRead = 0;
@@ -99,6 +108,21 @@ namespace R2D2Robot
 			return ret;
 		}
 
+		private void Timeout()
+		{
+			for (;;)
+			{
+				Thread.Sleep(1000);
+				if (btimeout)
+				{
+					connected = false;
+
+					break;
+				}
+
+				btimeout = true;
+			}
+		}
 		public bool HasData()
 		{
 			return com.DataAvailable;
