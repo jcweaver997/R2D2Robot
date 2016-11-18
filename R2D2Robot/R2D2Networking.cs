@@ -57,12 +57,11 @@ namespace R2D2Robot
 			{
 				case NetType.Remote:
 					Console.WriteLine("Attempting connection...");
-					remote = new IPEndPoint(Dns.GetHostEntry(ip).AddressList[0], port);
 					foreach (IPAddress a in Dns.GetHostEntry(ip).AddressList)
 					{
 						if (a.ToString().Contains(".")) // Make sure its ipv4
 						{
-							remote = new IPEndPoint(Dns.GetHostEntry(ip).AddressList[0], port);
+							remote = new IPEndPoint(a, port);
 							break;
 						}
 					}
