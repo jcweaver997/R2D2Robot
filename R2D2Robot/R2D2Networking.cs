@@ -57,8 +57,8 @@ namespace R2D2Robot
 			{
 				case NetType.Remote:
 					Console.WriteLine("Attempting connection...");
-                    remote = new IPEndPoint(IPAddress.Parse(ip), port);
-                    client = new UdpClient(remote);
+					remote = new IPEndPoint(Dns.GetHostEntry(ip).AddressList[0], port);
+                    client = new UdpClient();
                     receivedMessages = new ConcurrentQueue<ReturnValueType>();
 					Console.WriteLine("Connected");
 					connected = true;
