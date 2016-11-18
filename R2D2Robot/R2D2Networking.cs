@@ -29,7 +29,7 @@ namespace R2D2Robot
 
 		public enum ValueType
 		{
-			throttle = 1
+			throttle = 1, turn = 2
 		}
 
 		public struct ReturnValueType
@@ -62,18 +62,26 @@ namespace R2D2Robot
                     receivedMessages = new ConcurrentQueue<ReturnValueType>();
 					Console.WriteLine("Connected");
 					connected = true;
+					receiveThread = new Thread(new ThreadStart(Receive));
+					receiveThread.Start();
 					break;
 				case NetType.Robot:
+					if (client != null)
+					{
+						client.Close();
+					}
 					remote = new IPEndPoint(IPAddress.Any, port);
                     client = new UdpClient(remote);
                     Console.WriteLine("Waiting for remote...");
                     client.Receive(ref remote);
-                    Console.WriteLine("Connected");
+					Console.WriteLine("Connected to "+remote.Address.ToString());
+					connected = true;
                     receivedMessages = new ConcurrentQueue<ReturnValueType>();
                     receiveThread = new Thread(new ThreadStart(Receive));
+					receiveThread.Start();
                     timeout = new Thread(new ThreadStart(Timeout));
 					timeout.Start();
-					connected = true;
+
 					break;
 				default:
 					break;
@@ -106,8 +114,14 @@ namespace R2D2Robot
         {
             while (connected)
             {
-                byte[] b = client.Receive(ref remote);
-                if (b.Length != 5)
+				byte[] b = new byte[5];
+				try
+				{
+					b = client.Receive(ref remote);
+					btimeout = false;
+				}
+				catch (Exception) { Console.WriteLine("Couldnt rec");}
+					if (b.Length != 5)
                 {
                     Console.WriteLine("ERROR: Packet format wrong!");
                     continue;
@@ -126,7 +140,7 @@ namespace R2D2Robot
 		{
 			for (;;)
 			{
-				Thread.Sleep(1000);
+				Thread.Sleep(100);
 				if (btimeout)
 				{
 					connected = false;

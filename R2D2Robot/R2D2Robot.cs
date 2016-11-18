@@ -7,7 +7,7 @@ namespace R2D2Robot
 	{
 		SerialPort sp;
 		R2D2Networking netCom;
-
+		private float throttle = 0, turn = 0;
 		public R2D2Robot()
 		{
 
@@ -41,13 +41,20 @@ namespace R2D2Robot
 			switch (message.valueType)
 			{
 				case R2D2Networking.ValueType.throttle:
-					Console.WriteLine(((int)message.valueType) + " " + message.value);
-					sp.WriteLine(((int)message.valueType)+" "+message.value);
+					this.throttle = message.value;
 					break;
+				case R2D2Networking.ValueType.turn:
+					this.turn = message.value;
+					break;
+
 				default:
-					
+
 					break;
 			}
+			Console.WriteLine(1 + " " + (throttle + turn * .5));
+			Console.WriteLine(2 + " " + (throttle - turn * .5));
+			sp.WriteLine(1 + " " + (throttle + turn * .5)); // left
+			sp.WriteLine(2 + " " + (throttle - turn * .5)); // right
 		}
 
 		// For safety purposes
