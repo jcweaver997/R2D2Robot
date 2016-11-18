@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
+using System.Net;
 using System.Text;
 using System.Threading;
 namespace R2D2Robot
@@ -8,15 +10,17 @@ namespace R2D2Robot
 	class R2D2Networking
 	{
 		NetType netType;
-		TcpClient remote;
-		TcpListener robot;
-		NetworkStream com;
+		UdpClient client;
+		IPEndPoint remote;
 		Thread timeout;
+        Thread receiveThread;
 		public bool connected { get; private set;}
 
 		private const int port = 4445;
 		private string ip;
 		private bool btimeout = false;
+
+        private ConcurrentQueue<ReturnValueType> receivedMessages;
 
 		public enum NetType
 		{
@@ -30,6 +34,7 @@ namespace R2D2Robot
 
 		public struct ReturnValueType
 		{
+            public IPEndPoint endpoint;
 			public bool isData;
 			public ValueType valueType;
 			public float value;
@@ -52,25 +57,23 @@ namespace R2D2Robot
 			{
 				case NetType.Remote:
 					Console.WriteLine("Attempting connection...");
-					remote = new TcpClient(ip, port);
+                    remote = new IPEndPoint(IPAddress.Parse(ip), port);
+                    client = new UdpClient(remote);
+                    receivedMessages = new ConcurrentQueue<ReturnValueType>();
 					Console.WriteLine("Connected");
 					connected = true;
-					com = remote.GetStream();
 					break;
 				case NetType.Robot:
-					if (robot != null)
-					{
-						robot.Stop();
-						remote.Close();
-					}
-					robot = new TcpListener(System.Net.IPAddress.Any, port);
-					robot.Start();
-					Console.WriteLine("Waiting for remote...");
-					remote = robot.AcceptTcpClient();
-					timeout = new Thread(new ThreadStart(Timeout));
+					remote = new IPEndPoint(IPAddress.Any, port);
+                    client = new UdpClient(remote);
+                    Console.WriteLine("Waiting for remote...");
+                    client.Receive(ref remote);
+                    Console.WriteLine("Connected");
+                    receivedMessages = new ConcurrentQueue<ReturnValueType>();
+                    receiveThread = new Thread(new ThreadStart(Receive));
+                    timeout = new Thread(new ThreadStart(Timeout));
 					timeout.Start();
 					connected = true;
-					com = remote.GetStream();
 					break;
 				default:
 					break;
@@ -83,30 +86,41 @@ namespace R2D2Robot
 			packet[0] = (byte)t;
 			byte[] values = BitConverter.GetBytes(v);
 			values.CopyTo(packet, 1);
-			com.Write(packet, 0, 5);
+            client.Send(packet,5,remote);
 		}
 
 		public ReturnValueType RecvValue()
 		{
-			ReturnValueType ret = new ReturnValueType();
-			if (!com.DataAvailable)
-			{
-				ret.isData = false;
-				return ret;
-			}
-			btimeout = false;
-			ret.isData = true;
-			byte[] buffer = new byte[5];
-			int numberRead = 0;
-			while (numberRead < 5)
-			{
-				numberRead += com.Read(buffer, numberRead, 5 - numberRead);
-			}
-
-			ret.valueType = (ValueType)buffer[0];
-			ret.value = BitConverter.ToSingle(buffer, 1);
-			return ret;
+            ReturnValueType retv = new ReturnValueType() ;
+            if (receivedMessages.Count==0)
+            {
+                retv.isData = false;
+                return retv;
+            }
+            
+            retv.isData = receivedMessages.TryDequeue(out retv);
+			return retv;
 		}
+
+        private void Receive()
+        {
+            while (connected)
+            {
+                byte[] b = client.Receive(ref remote);
+                if (b.Length != 5)
+                {
+                    Console.WriteLine("ERROR: Packet format wrong!");
+                    continue;
+                }
+                ReturnValueType ret = new ReturnValueType();
+                ret.isData = true;
+                ret.valueType = (ValueType)b[0];
+                ret.endpoint = remote;
+                ret.value = BitConverter.ToSingle(b, 1);
+                receivedMessages.Enqueue(ret);
+            }
+
+        }
 
 		private void Timeout()
 		{
@@ -125,7 +139,7 @@ namespace R2D2Robot
 		}
 		public bool HasData()
 		{
-			return com.DataAvailable;
+			return receivedMessages.Count>0;
 		}
 
 	}
