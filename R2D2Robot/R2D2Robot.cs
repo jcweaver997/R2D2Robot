@@ -15,14 +15,24 @@ namespace R2D2Robot
 		}
 		public void Init()
 		{
+
+			try
+			{
+				sp = new SerialPort(SerialPort.GetPortNames()[1], 9600, Parity.None, 8, StopBits.One);
+
+				sp.Open();
+			}
+			catch (Exception){
+				Init();
+				return;
+			}
+
 			netCom = new R2D2Networking();
 			netCom.Start();
-			sp = new SerialPort("COM9", 9600, Parity.None, 8, StopBits.One);
-			sp.Open();
-
 			for (;;)
 			{
 				Update();
+				System.Threading.Thread.Sleep(20);
 				if (!netCom.connected)
 				{
 					MassZero();
@@ -30,31 +40,21 @@ namespace R2D2Robot
 				}
 			}
 		}
-
+		private byte counter = 0;
 		public void Update()
 		{
-			R2D2Networking.ReturnValueType message = netCom.RecvValue();
-			if (!message.isData)
-			{
-				return;
-			}
-			switch (message.valueType)
-			{
-				case R2D2Networking.ValueType.throttle:
-					this.throttle = message.value;
-					break;
-				case R2D2Networking.ValueType.turn:
-					this.turn = message.value;
-					break;
+			counter++;
+			this.throttle = netCom.RecvValue((int)R2D2Networking.ValueType.throttle);
+			this.turn = netCom.RecvValue((int)R2D2Networking.ValueType.turn);
 
-				default:
-
-					break;
+			sp.WriteLine(1 + " " + (throttle + turn)); // left
+			sp.WriteLine(2 + " " + (throttle - turn)); // right
+			if (counter>=30)
+			{
+				counter = 0;
+				Console.WriteLine(1 + " " + (throttle)); // left
+				Console.WriteLine(2 + " " + turn); // right
 			}
-			Console.WriteLine(1 + " " + (throttle + turn * .5));
-			Console.WriteLine(2 + " " + (throttle - turn * .5));
-			sp.WriteLine(1 + " " + (throttle + turn * .5)); // left
-			sp.WriteLine(2 + " " + (throttle - turn * .5)); // right
 		}
 
 		// For safety purposes

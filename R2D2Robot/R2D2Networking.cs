@@ -20,7 +20,8 @@ namespace R2D2Robot
 		private string ip;
 		private bool btimeout = false;
 
-        private ConcurrentQueue<ReturnValueType> receivedMessages;
+        
+		private ConcurrentDictionary<int, float> receivedValues;
 
 		public enum NetType
 		{
@@ -30,14 +31,6 @@ namespace R2D2Robot
 		public enum ValueType
 		{
 			throttle = 1, turn = 2
-		}
-
-		public struct ReturnValueType
-		{
-            public IPEndPoint endpoint;
-			public bool isData;
-			public ValueType valueType;
-			public float value;
 		}
 
 		public R2D2Networking(string ip)
@@ -53,6 +46,10 @@ namespace R2D2Robot
 
 		public void Start()
 		{
+			receivedValues = new ConcurrentDictionary<int, float>();
+
+			receivedValues.TryAdd((int)ValueType.throttle, 0);
+			receivedValues.TryAdd((int)ValueType.turn, 0);
 			switch (netType)
 			{
 				case NetType.Remote:
@@ -66,7 +63,7 @@ namespace R2D2Robot
 						}
 					}
                     client = new UdpClient();
-                    receivedMessages = new ConcurrentQueue<ReturnValueType>();
+
 					Console.WriteLine("Connected");
 					connected = true;
 					receiveThread = new Thread(new ThreadStart(Receive));
@@ -83,7 +80,6 @@ namespace R2D2Robot
                     client.Receive(ref remote);
 					Console.WriteLine("Connected to "+remote.Address.ToString());
 					connected = true;
-                    receivedMessages = new ConcurrentQueue<ReturnValueType>();
                     receiveThread = new Thread(new ThreadStart(Receive));
 					receiveThread.Start();
                     timeout = new Thread(new ThreadStart(Timeout));
@@ -104,21 +100,15 @@ namespace R2D2Robot
             client.Send(packet,5,remote);
 		}
 
-		public ReturnValueType RecvValue()
+		public float RecvValue(int i)
 		{
-            ReturnValueType retv = new ReturnValueType() ;
-            if (receivedMessages.Count==0)
-            {
-                retv.isData = false;
-                return retv;
-            }
+			return receivedValues[i];
             
-            retv.isData = receivedMessages.TryDequeue(out retv);
-			return retv;
 		}
 
         private void Receive()
         {
+			
             while (connected)
             {
 				byte[] b = new byte[5];
@@ -133,12 +123,7 @@ namespace R2D2Robot
                     Console.WriteLine("ERROR: Packet format wrong!");
                     continue;
                 }
-                ReturnValueType ret = new ReturnValueType();
-                ret.isData = true;
-                ret.valueType = (ValueType)b[0];
-                ret.endpoint = remote;
-                ret.value = BitConverter.ToSingle(b, 1);
-                receivedMessages.Enqueue(ret);
+				receivedValues[b[0]] = BitConverter.ToSingle(b, 1);
             }
 
         }
@@ -147,20 +132,16 @@ namespace R2D2Robot
 		{
 			for (;;)
 			{
-				Thread.Sleep(100);
+				Thread.Sleep(1000);
 				if (btimeout)
 				{
 					connected = false;
-
+					client.Close();
 					break;
 				}
 
 				btimeout = true;
 			}
-		}
-		public bool HasData()
-		{
-			return receivedMessages.Count>0;
 		}
 
 	}
